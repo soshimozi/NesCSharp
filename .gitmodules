@@ -1,0 +1,3 @@
+[submodule "CorePixelEngine"]
+	path = CorePixelEngine
+	url = https://github.com/soshimozi/CorePixelEngine.git

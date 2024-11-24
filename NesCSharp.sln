@@ -1,0 +1,74 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34622.214
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NesCSharp", "NesCSharp\NesCSharp.csproj", "{875D7ABA-3275-4D81-B063-F7485FA4C77D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenGL.Net_netcore2.2", "CorePixelEngine\OpenGL.Net\OpenGL.Net\OpenGL.Net_netcore2.2.csproj", "{75F5EE61-5456-4652-AB68-7DCDA6329148}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CorePixelEngine.Core", "CorePixelEngine\CorePixelEngine.Core\CorePixelEngine.Core.csproj", "{D974C89D-5055-48A7-9E18-6233235CAE0B}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CorePixelEngine.Windows", "CorePixelEngine\CorePixelEngine.Windows\CorePixelEngine.Windows.csproj", "{265F4240-8EE3-47C5-A8B3-639A6E72BC05}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CorePixelEngine.OpenGL.Net", "CorePixelEngine\CorePixelEngine.OpenGL.Net\CorePixelEngine.OpenGL.Net.csproj", "{A63F13D7-85B4-4E52-A2D6-C04077AA216F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Debug|x86.Build.0 = Debug|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Release|x86.ActiveCfg = Release|Any CPU
+		{875D7ABA-3275-4D81-B063-F7485FA4C77D}.Release|x86.Build.0 = Release|Any CPU
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Debug|x86.ActiveCfg = Debug|x86
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Debug|x86.Build.0 = Debug|x86
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Release|Any CPU.Build.0 = Release|Any CPU
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Release|x86.ActiveCfg = Release|x86
+		{75F5EE61-5456-4652-AB68-7DCDA6329148}.Release|x86.Build.0 = Release|x86
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Debug|x86.Build.0 = Debug|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Release|x86.ActiveCfg = Release|Any CPU
+		{D974C89D-5055-48A7-9E18-6233235CAE0B}.Release|x86.Build.0 = Release|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Debug|x86.Build.0 = Debug|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Release|Any CPU.Build.0 = Release|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Release|x86.ActiveCfg = Release|Any CPU
+		{265F4240-8EE3-47C5-A8B3-639A6E72BC05}.Release|x86.Build.0 = Release|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Debug|x86.Build.0 = Debug|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Release|x86.ActiveCfg = Release|Any CPU
+		{A63F13D7-85B4-4E52-A2D6-C04077AA216F}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4093CA17-945F-470F-B289-4698A156E82A}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		CorePixelEngine\OpenGL.Net\Khronos.Net\Khronos.Net.projitems*{75f5ee61-5456-4652-ab68-7dcda6329148}*SharedItemsImports = 5
+	EndGlobalSection
+EndGlobal
