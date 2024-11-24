@@ -568,10 +568,37 @@ public class Olc6502
 
     private List<Instruction> lookup;
 
-    // Addressing Modes (stubs)
-    private byte IMP() => 0;
-    private byte IMM() => 0;
-    private byte ZP0() => 0;
+    // Address Mode: Implied
+    // There is no additional data required for this instruction. The instruction
+    // does something very simple like like sets a status bit. However, we will
+    // target the accumulator, for instructions like PHA
+    private byte IMP()
+    {
+        Fetched = A;
+        return 0;
+    }
+
+    // Address Mode: Immediate
+    // The instruction expects the next byte to be used as a value, so we'll prep
+    // the read address to point to the next byte
+    private byte IMM()
+    {
+        AddrAbs = Pc++;
+        return 0;
+    }
+
+    // Address Mode: Zero Page
+    // To save program bytes, zero page addressing allows you to absolutely address
+    // a location in first 0xFF bytes of address range. Clearly this only requires
+    // one byte instead of the usual two.
+    private byte ZP0()
+    {
+        AddrAbs = Read(Pc);
+        Pc++;
+        AddrAbs &= 0x00ff;
+        return 0;
+    }
+
     private byte ZPX() => 0;
     private byte ZPY() => 0;
     private byte REL() => 0;
