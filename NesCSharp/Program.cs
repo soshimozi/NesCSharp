@@ -34,7 +34,7 @@ namespace NesCSharp
             DrawString(new VectorI2d(x, y + 20), "A: $" + Hex(_nes.Cpu.A, 2) + "  [" + _nes.Cpu.A + "]", Pixel.WHITE, 1);
             DrawString(new VectorI2d(x, y + 30), "X: $" + Hex(_nes.Cpu.X, 2) + "  [" + _nes.Cpu.X + "]", Pixel.WHITE, 1);
             DrawString(new VectorI2d(x, y + 40), "Y: $" + Hex(_nes.Cpu.Y, 2) + "  [" + _nes.Cpu.Y + "]", Pixel.WHITE, 1);
-            DrawString(new VectorI2d(x, y + 50), "Stack P: $" + Hex(_nes.Cpu.Stkp, 4), Pixel.WHITE, 1);
+            DrawString(new VectorI2d(x, y + 50), "Stack P: $" + Hex(_nes.Cpu.Sp, 4), Pixel.WHITE, 1);
         }
 
         //private void DrawRam(int x, int y, ushort address, int nRows, int nColumns)
@@ -96,7 +96,7 @@ namespace NesCSharp
 
         public override bool OnUserCreate()
         {
-            _cartridge = new Cartridge("nestest.nes");
+            _cartridge = new Cartridge("example.nes");
             _nes.InsertCartridge(_cartridge);
 
             _mapAsm = _nes.Cpu.Disassemble(0x0000, 0xffff);
@@ -113,7 +113,7 @@ namespace NesCSharp
             {
                 if (residualTime > 0.0f)
                 {
-                    fElapsedTime -= fElapsedTime;
+                    residualTime -= fElapsedTime;
                 }
                 else
                 {
