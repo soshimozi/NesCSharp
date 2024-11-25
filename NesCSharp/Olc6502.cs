@@ -1,35 +1,38 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace NesCSharp;
 
 public class Olc6502
 {
-    const ushort STACK_OFFSET = 0x0100;
+    private const ushort StackOffset = 0x0100;
 
     // Instruction struct
     private class Instruction
     {
-        public string Name { get; set; }
-        public Func<byte> Operate { get; set; }
-        public Func<byte> AddrMode { get; set; }
-        public byte Cycles { get; set; }
+        public required string Name { get; init; }
+        public required Func<byte> Operate { get; init; }
+        public required Func<byte> AddressMode { get; init; }
+        public byte Cycles { get; init; }
     }
 
-    private List<Instruction> lookup;
+    private readonly List<Instruction> _lookup;
 
     // Private Bus reference
     private Bus? _bus;
+
+    // number of cycles in current instruction
     private byte _cycles = 0x00;
 
     // Fetch data for instructions
-    private byte _fetched;
+    private byte _fetched = 0x00;
 
     // Addressing data
-    public ushort AddressAbs { get; private set; } = 0x0000;
-    public ushort AddressRel { get; private set; } = 0x00;
+    private ushort _absoluteAddress = 0x0000;
+    private ushort _relativeAddress  = 0x00;
 
     // Opcode and cycle information
-    public byte Opcode { get; private set; } = 0x00;
+    private byte _opcode = 0x00;
 
 
     // Registers and flags
@@ -49,279 +52,279 @@ public class Olc6502
     public Olc6502()
     {
         // Initialize the lookup table with instruction details
-        lookup =
+        _lookup =
         [
-            new Instruction { Name = "BRK", Operate = BRK, AddrMode = IMM, Cycles = 7 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "ASL", Operate = ASL, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "PHP", Operate = PHP, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "ASL", Operate = ASL, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "ASL", Operate = ASL, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "BRK", Operate = BRK, AddressMode = IMM, Cycles = 7 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "ASL", Operate = ASL, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "PHP", Operate = PHP, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "ASL", Operate = ASL, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "ASL", Operate = ASL, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BPL", Operate = BPL, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "ASL", Operate = ASL, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "CLC", Operate = CLC, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ORA", Operate = ORA, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "ASL", Operate = ASL, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BPL", Operate = BPL, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "ASL", Operate = ASL, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "CLC", Operate = CLC, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ORA", Operate = ORA, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "ASL", Operate = ASL, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
             
-            new Instruction { Name = "JSR", Operate = JSR, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "BIT", Operate = BIT, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "ROL", Operate = ROL, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "PLP", Operate = PLP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "ROL", Operate = ROL, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "BIT", Operate = BIT, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "ROL", Operate = ROL, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "JSR", Operate = JSR, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "BIT", Operate = BIT, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "ROL", Operate = ROL, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "PLP", Operate = PLP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "ROL", Operate = ROL, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "BIT", Operate = BIT, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "ROL", Operate = ROL, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BMI", Operate = BMI, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "ROL", Operate = ROL, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "SEC", Operate = SEC, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "AND", Operate = AND, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "ROL", Operate = ROL, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BMI", Operate = BMI, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "ROL", Operate = ROL, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "SEC", Operate = SEC, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "AND", Operate = AND, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "ROL", Operate = ROL, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
 
-            new Instruction { Name = "RTI", Operate = RTI, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "LSR", Operate = LSR, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "PHA", Operate = PHA, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "LSR", Operate = LSR, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "JMP", Operate = JMP, AddrMode = ABS, Cycles = 3 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "LSR", Operate = LSR, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "RTI", Operate = RTI, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "LSR", Operate = LSR, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "PHA", Operate = PHA, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "LSR", Operate = LSR, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "JMP", Operate = JMP, AddressMode = ABS, Cycles = 3 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "LSR", Operate = LSR, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BVC", Operate = BVC, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "LSR", Operate = LSR, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "CLI", Operate = CLI, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "EOR", Operate = EOR, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "LSR", Operate = LSR, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BVC", Operate = BVC, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "LSR", Operate = LSR, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "CLI", Operate = CLI, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "EOR", Operate = EOR, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "LSR", Operate = LSR, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
 
-            new Instruction { Name = "RTS", Operate = RTS, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "ROR", Operate = ROR, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "PLA", Operate = PLA, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "ROR", Operate = ROR, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "JMP", Operate = JMP, AddrMode = IND, Cycles = 5 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "ROR", Operate = ROR, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "RTS", Operate = RTS, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "ROR", Operate = ROR, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "PLA", Operate = PLA, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "ROR", Operate = ROR, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "JMP", Operate = JMP, AddressMode = IND, Cycles = 5 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "ROR", Operate = ROR, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BVS", Operate = BVS, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "ROR", Operate = ROR, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "SEI", Operate = SEI, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "ADC", Operate = ADC, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "ROR", Operate = ROR, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BVS", Operate = BVS, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "ROR", Operate = ROR, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "SEI", Operate = SEI, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "ADC", Operate = ADC, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "ROR", Operate = ROR, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
 
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "STY", Operate = STY, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "STX", Operate = STX, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "DEY", Operate = DEY, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "TXA", Operate = TXA, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "STY", Operate = STY, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "STX", Operate = STX, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "STY", Operate = STY, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "STX", Operate = STX, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "DEY", Operate = DEY, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "TXA", Operate = TXA, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "STY", Operate = STY, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "STX", Operate = STX, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
 
-            new Instruction { Name = "BCC", Operate = BCC, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = IZY, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "STY", Operate = STY, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "STX", Operate = STX, AddrMode = ZPY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "TYA", Operate = TYA, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = ABY, Cycles = 5 },
-            new Instruction { Name = "TXS", Operate = TXS, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "STA", Operate = STA, AddrMode = ABX, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
+            new Instruction { Name = "BCC", Operate = BCC, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = IZY, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "STY", Operate = STY, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "STX", Operate = STX, AddressMode = ZPY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "TYA", Operate = TYA, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = ABY, Cycles = 5 },
+            new Instruction { Name = "TXS", Operate = TXS, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "STA", Operate = STA, AddressMode = ABX, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
 
-            new Instruction { Name = "LDY", Operate = LDY, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "LDX", Operate = LDX, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "LDY", Operate = LDY, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "LDX", Operate = LDX, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 3 },
-            new Instruction { Name = "TAY", Operate = TAY, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "TAX", Operate = TAX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "LDY", Operate = LDY, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "LDX", Operate = LDX, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
+            new Instruction { Name = "LDY", Operate = LDY, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "LDX", Operate = LDX, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "LDY", Operate = LDY, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "LDX", Operate = LDX, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 3 },
+            new Instruction { Name = "TAY", Operate = TAY, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "TAX", Operate = TAX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "LDY", Operate = LDY, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "LDX", Operate = LDX, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
 
-            new Instruction { Name = "BCS", Operate = BCS, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "LDY", Operate = LDY, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "LDX", Operate = LDX, AddrMode = ZPY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "CLV", Operate = CLV, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "TSX", Operate = TSX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "LDY", Operate = LDY, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "LDA", Operate = LDA, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "LDX", Operate = LDX, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 4 },
+            new Instruction { Name = "BCS", Operate = BCS, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "LDY", Operate = LDY, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "LDX", Operate = LDX, AddressMode = ZPY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "CLV", Operate = CLV, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "TSX", Operate = TSX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "LDY", Operate = LDY, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "LDA", Operate = LDA, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "LDX", Operate = LDX, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 4 },
 
-            new Instruction { Name = "CPY", Operate = CPY, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "CPY", Operate = CPY, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "DEC", Operate = DEC, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "INY", Operate = INY, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "DEX", Operate = DEX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "CPY", Operate = CPY, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "DEC", Operate = DEC, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "CPY", Operate = CPY, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "CPY", Operate = CPY, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "DEC", Operate = DEC, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "INY", Operate = INY, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "DEX", Operate = DEX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "CPY", Operate = CPY, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "DEC", Operate = DEC, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BNE", Operate = BNE, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "DEC", Operate = DEC, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "CLD", Operate = CLD, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "NOP", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "CMP", Operate = CMP, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "DEC", Operate = DEC, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BNE", Operate = BNE, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "DEC", Operate = DEC, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "CLD", Operate = CLD, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "NOP", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "CMP", Operate = CMP, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "DEC", Operate = DEC, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
 
-            new Instruction { Name = "CPX", Operate = CPX, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = IZX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "CPX", Operate = CPX, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = ZP0, Cycles = 3 },
-            new Instruction { Name = "INC", Operate = INC, AddrMode = ZP0, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 5 },
-            new Instruction { Name = "INX", Operate = INX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = IMM, Cycles = 2 },
-            new Instruction { Name = "NOP", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = SBC, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "CPX", Operate = CPX, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = ABS, Cycles = 4 },
-            new Instruction { Name = "INC", Operate = INC, AddrMode = ABS, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
+            new Instruction { Name = "CPX", Operate = CPX, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = IZX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "CPX", Operate = CPX, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = ZP0, Cycles = 3 },
+            new Instruction { Name = "INC", Operate = INC, AddressMode = ZP0, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 5 },
+            new Instruction { Name = "INX", Operate = INX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = IMM, Cycles = 2 },
+            new Instruction { Name = "NOP", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = SBC, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "CPX", Operate = CPX, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = ABS, Cycles = 4 },
+            new Instruction { Name = "INC", Operate = INC, AddressMode = ABS, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
 
-            new Instruction { Name = "BEQ", Operate = BEQ, AddrMode = REL, Cycles = 2 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = IZY, Cycles = 5 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 8 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = ZPX, Cycles = 4 },
-            new Instruction { Name = "INC", Operate = INC, AddrMode = ZPX, Cycles = 6 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 6 },
-            new Instruction { Name = "SED", Operate = SED, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = ABY, Cycles = 4 },
-            new Instruction { Name = "NOP", Operate = NOP, AddrMode = IMP, Cycles = 2 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
-            new Instruction { Name = "???", Operate = NOP, AddrMode = IMP, Cycles = 4 },
-            new Instruction { Name = "SBC", Operate = SBC, AddrMode = ABX, Cycles = 4 },
-            new Instruction { Name = "INC", Operate = INC, AddrMode = ABX, Cycles = 7 },
-            new Instruction { Name = "???", Operate = XXX, AddrMode = IMP, Cycles = 7 },
+            new Instruction { Name = "BEQ", Operate = BEQ, AddressMode = REL, Cycles = 2 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = IZY, Cycles = 5 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 8 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = ZPX, Cycles = 4 },
+            new Instruction { Name = "INC", Operate = INC, AddressMode = ZPX, Cycles = 6 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 6 },
+            new Instruction { Name = "SED", Operate = SED, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = ABY, Cycles = 4 },
+            new Instruction { Name = "NOP", Operate = NOP, AddressMode = IMP, Cycles = 2 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
+            new Instruction { Name = "???", Operate = NOP, AddressMode = IMP, Cycles = 4 },
+            new Instruction { Name = "SBC", Operate = SBC, AddressMode = ABX, Cycles = 4 },
+            new Instruction { Name = "INC", Operate = INC, AddressMode = ABX, Cycles = 7 },
+            new Instruction { Name = "???", Operate = XXX, AddressMode = IMP, Cycles = 7 },
         ];
     }
 
@@ -346,7 +349,7 @@ public class Olc6502
         // the next one is ready to be executed
         if (_cycles == 0)
         {
-            Opcode = Read(Pc);
+            _opcode = Read(Pc);
 
             // Always set the unused status flag bit to 1
             SetFlag(Flags6502.U, true);
@@ -355,10 +358,10 @@ public class Olc6502
             Pc++;
 
             // Get starting number of cycles
-            _cycles = lookup[Opcode].Cycles;
+            _cycles = _lookup[_opcode].Cycles;
 
-            var additionalCycle1 = lookup[Opcode].AddrMode();
-            var additionalCycle2 = lookup[Opcode].Operate();
+            var additionalCycle1 = _lookup[_opcode].AddressMode();
+            var additionalCycle2 = _lookup[_opcode].Operate();
 
             _cycles += (byte)(additionalCycle1 & additionalCycle2);
 
@@ -380,17 +383,17 @@ public class Olc6502
         Sp = 0xFD;
         Status = 0x00 | (byte)Flags6502.U;
 
-        AddressAbs = 0xFFFC;
+        _absoluteAddress = 0xFFFC;
 
         //ushort lo = Read((ushort)(AddressAbs + 0));
         //ushort hi = Read((ushort)(AddressAbs + 1));
 
         //Pc = (ushort)((hi << 8) | lo);
 
-        Pc = ReadWord(AddressAbs);
+        Pc = ReadWord(_absoluteAddress);
 
-        AddressRel = 0x0000;
-        AddressAbs = 0x0000;
+        _relativeAddress = 0x0000;
+        _absoluteAddress = 0x0000;
         _fetched = 0x00;
 
         _cycles = 8;
@@ -419,12 +422,12 @@ public class Olc6502
         //Sp++;
 
         // Read new program counter location from fixed address
-        AddressAbs = 0xfffe;
+        _absoluteAddress = 0xfffe;
         //ushort lo = Read((ushort)(AddressAbs + 0));
         //ushort hi = Read((ushort)(AddressAbs + 1));
 
         //Pc = (ushort)((hi << 8) | lo);
-        Pc = ReadWord(AddressAbs);
+        Pc = ReadWord(_absoluteAddress);
 
         _cycles = 7;
     }
@@ -450,12 +453,12 @@ public class Olc6502
         //Sp++;
 
         // Read new program counter location from fixed address
-        AddressAbs = 0xfffa;
+        _absoluteAddress = 0xfffa;
         //ushort lo = Read((ushort)(AddressAbs + 0));
         //ushort hi = Read((ushort)(AddressAbs + 1));
 
         //Pc = (ushort)((hi << 8) | lo);
-        Pc = ReadWord(AddressAbs);
+        Pc = ReadWord(_absoluteAddress);
 
         _cycles = 8;
     }
@@ -481,9 +484,9 @@ public class Olc6502
     // function. It also returns it for convenience.
     public byte Fetch()
     {
-        if (lookup[Opcode].AddrMode != IMP)
+        if (_lookup[_opcode].AddressMode != IMP)
         {
-            _fetched = Read(AddressAbs);
+            _fetched = Read(_absoluteAddress);
         }
 
         return _fetched;
@@ -554,7 +557,7 @@ public class Olc6502
     // the read address to point to the next byte
     private byte IMM()
     {
-        AddressAbs = Pc++;
+        _absoluteAddress = Pc++;
         return 0;
     }
 
@@ -564,9 +567,9 @@ public class Olc6502
     // one byte instead of the usual two.
     private byte ZP0()
     {
-        AddressAbs = Read(Pc);
+        _absoluteAddress = Read(Pc);
         Pc++;
-        AddressAbs &= 0x00ff;
+        _absoluteAddress &= 0x00ff;
         return 0;
     }
 
@@ -576,9 +579,9 @@ public class Olc6502
     // ranges within the first page.
     private byte ZPX()
     {
-        AddressAbs = Read((ushort)(Pc + X));
+        _absoluteAddress = Read((ushort)(Pc + X));
         Pc++;
-        AddressAbs &= 0x00ff;
+        _absoluteAddress &= 0x00ff;
         return 0;
     }
 
@@ -586,9 +589,9 @@ public class Olc6502
     // Same as above but uses Y Register for offset
     private byte ZPY()
     {
-        AddressAbs = Read((ushort)(Pc + Y));
+        _absoluteAddress = Read((ushort)(Pc + Y));
         Pc++;
-        AddressAbs &= 0x00ff;
+        _absoluteAddress &= 0x00ff;
         return 0;
     }
 
@@ -598,11 +601,11 @@ public class Olc6502
     // you cant directly branch to any address in the addressable range.
     private byte REL()
     {
-        AddressRel = Read(Pc);
+        _relativeAddress = Read(Pc);
         Pc++;
-        if ((AddressRel & 0x80) != 0)
+        if ((_relativeAddress & 0x80) != 0)
         {
-            AddressRel |= 0xff00;
+            _relativeAddress |= 0xff00;
         }
 
         return 0;
@@ -617,7 +620,7 @@ public class Olc6502
         ushort hi = Read(Pc);
         Pc++;
 
-        AddressAbs = (ushort)((hi << 8) | lo);
+        _absoluteAddress = (ushort)((hi << 8) | lo);
 
         return 0;
     }
@@ -633,11 +636,11 @@ public class Olc6502
         ushort hi = Read(Pc);
         Pc++;
 
-        AddressAbs = (ushort)((hi << 8) | lo);
-        AddressAbs += X;
+        _absoluteAddress = (ushort)((hi << 8) | lo);
+        _absoluteAddress += X;
 
         // check for page boundary
-        return (AddressAbs & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
+        return (_absoluteAddress & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
     }
 
     // Address Mode: Absolute with Y Offset
@@ -651,11 +654,11 @@ public class Olc6502
         ushort hi = Read(Pc);
         Pc++;
 
-        AddressAbs = (ushort)((hi << 8) | lo);
-        AddressAbs += Y;
+        _absoluteAddress = (ushort)((hi << 8) | lo);
+        _absoluteAddress += Y;
 
         // check for page boundary
-        return (AddressAbs & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
+        return (_absoluteAddress & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
     }
 
     // Note: The next 3 address modes use indirection (aka Pointers!)
@@ -679,11 +682,11 @@ public class Olc6502
 
         if (ptrLo == 0x00ff) // Simulate page boundary bug
         {
-            AddressAbs = (ushort)((Read((ushort)(ptr & 0xff00)) << 8) | Read(ptr));
+            _absoluteAddress = (ushort)((Read((ushort)(ptr & 0xff00)) << 8) | Read(ptr));
         }
         else // Behave normally
         {
-            AddressAbs = (ushort)((Read((ushort)(ptr + 1)) << 8) | Read(ptr));
+            _absoluteAddress = (ushort)((Read((ushort)(ptr + 1)) << 8) | Read(ptr));
         }
 
         return 0;
@@ -701,7 +704,7 @@ public class Olc6502
         ushort lo = Read((ushort)((ushort)(t + (ushort)X) & 0x00ff));
         ushort hi = Read((ushort)((ushort)(t + (ushort)X + 1) & 0x00ff));
 
-        AddressAbs = (ushort)((hi << 8) | lo);
+        _absoluteAddress = (ushort)((hi << 8) | lo);
         return 0;
     }
 
@@ -718,10 +721,10 @@ public class Olc6502
         ushort lo = Read((ushort)(t & 0x00ff));
         ushort hi = Read((ushort)((t + 1) & 0x00ff));
 
-        AddressAbs = (ushort)((hi << 8) | lo);
-        AddressAbs += Y;
+        _absoluteAddress = (ushort)((hi << 8) | lo);
+        _absoluteAddress += Y;
 
-        return (AddressAbs & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
+        return (_absoluteAddress & 0xff00) != (hi << 8) ? (byte)1 : (byte)0;
     }
 
     // Instruction: Add with Carry In
@@ -828,13 +831,13 @@ public class Olc6502
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x00);
         SetFlag(Flags6502.N, (temp & 0x80) != 0);
 
-        if (lookup[Opcode].AddrMode == IMP)
+        if (_lookup[_opcode].AddressMode == IMP)
         {
             A = (byte)(temp & 0x00ff);
         }
         else
         {
-            Write(AddressAbs, (byte)(temp & 0x00ff));
+            Write(_absoluteAddress, (byte)(temp & 0x00ff));
         }
 
         return 0;
@@ -1041,7 +1044,7 @@ public class Olc6502
         Fetch();
         var temp = (ushort)(_fetched - 1);
 
-        Write(AddressAbs, (byte)(temp & 0x00ff));
+        Write(_absoluteAddress, (byte)(temp & 0x00ff));
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x0000);
         SetFlag(Flags6502.N, (temp & 0x0080) != 0);
 
@@ -1094,7 +1097,7 @@ public class Olc6502
     {
         Fetch();
         var temp = (ushort)(_fetched + 1);
-        Write(AddressAbs, (byte)(temp & 0x00ff));
+        Write(_absoluteAddress, (byte)(temp & 0x00ff));
 
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x0000);
         SetFlag(Flags6502.N, (temp & 0x0080) != 0);
@@ -1128,7 +1131,7 @@ public class Olc6502
     // Function:    pc = address
     private byte JMP()
     {
-        Pc = AddressAbs;
+        Pc = _absoluteAddress;
         return 0;
     }
 
@@ -1145,7 +1148,7 @@ public class Olc6502
         //Sp++;
         Push((byte)(Pc & 0x00ff));
 
-        Pc = AddressAbs;
+        Pc = _absoluteAddress;
 
         return 0;
     }
@@ -1195,13 +1198,13 @@ public class Olc6502
 
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x0000);
         SetFlag(Flags6502.N, (temp & 0x0080) != 0);
-        if (lookup[Opcode].AddrMode == IMP)
+        if (_lookup[_opcode].AddressMode == IMP)
         {
             A = (byte)(temp & 0x00ff);
         }
         else
         {
-            Write(AddressAbs, (byte)(temp & 0x00ff));
+            Write(_absoluteAddress, (byte)(temp & 0x00ff));
         }
 
         return 0;
@@ -1209,7 +1212,7 @@ public class Olc6502
 
     private byte NOP()
     {
-        return Opcode switch
+        return _opcode switch
         {
             0x1c or 0x3c or 0x5c or 0x7c or 0xdc or 0xfc => 1,
             _ => 0,
@@ -1275,13 +1278,13 @@ public class Olc6502
         SetFlag(Flags6502.C, temp & 0xff00);
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x0000);
         SetFlag(Flags6502.N, temp & 0x0080);
-        if (lookup[Opcode].AddrMode == IMP)
+        if (_lookup[_opcode].AddressMode == IMP)
         {
             A = (byte)(temp & 0x00ff);
         }
         else
         {
-            Write(AddressAbs, (byte)(temp & 0x00ff));
+            Write(_absoluteAddress, (byte)(temp & 0x00ff));
         }
 
         return 0;
@@ -1294,13 +1297,13 @@ public class Olc6502
         SetFlag(Flags6502.C, temp & 0xff00);
         SetFlag(Flags6502.Z, (temp & 0x00ff) == 0x0000);
         SetFlag(Flags6502.N, temp & 0x0080);
-        if (lookup[Opcode].AddrMode == IMP)
+        if (_lookup[_opcode].AddressMode == IMP)
         {
             A = (byte)(temp & 0x00ff);
         }
         else
         {
-            Write(AddressAbs, (byte)(temp & 0x00ff));
+            Write(_absoluteAddress, (byte)(temp & 0x00ff));
         }
 
         return 0;
@@ -1312,8 +1315,10 @@ public class Olc6502
         SetFlag(Flags6502.B, false);
         SetFlag(Flags6502.U, false);
 
-        Pc = (ushort)Pop();
-        Pc |= (ushort)Pop();
+        var lo = Pop();
+        var hi = Pop();
+
+        Pc = (ushort)((hi << 8) | lo);
 
         return 0;
     }
@@ -1375,7 +1380,7 @@ public class Olc6502
     // Function:    M = A
     private byte STA()
     {
-        Write(AddressAbs, A);
+        Write(_absoluteAddress, A);
         return 0;
     }
 
@@ -1383,7 +1388,7 @@ public class Olc6502
     // Function:    M = X
     private byte STX()
     {
-        Write(AddressAbs, X);
+        Write(_absoluteAddress, X);
         return 0;
     }
 
@@ -1391,7 +1396,7 @@ public class Olc6502
     // Function:    M = Y
     private byte STY()
     {
-        Write(AddressAbs, Y);
+        Write(_absoluteAddress, Y);
         return 0;
     }
 
@@ -1464,11 +1469,11 @@ public class Olc6502
     private byte Pop()
     {
         Sp++;
-        return Read((byte)(STACK_OFFSET + Sp));
+        return Read((ushort)(StackOffset + Sp));
     }
     private void Push(byte value)
     {
-        Write((ushort)(STACK_OFFSET + Sp), value);
+        Write((ushort)(StackOffset + Sp), value);
         Sp--;
     }
     private bool IsNegative(byte value)
@@ -1482,12 +1487,12 @@ public class Olc6502
         if (!predicate()) return;
 
         _cycles++;
-        AddressAbs = (ushort)(Pc + AddressRel);
+        _absoluteAddress = (ushort)(Pc + _relativeAddress);
 
-        if ((AddressAbs & 0xff00) != (Pc & 0xff00))
+        if ((_absoluteAddress & 0xff00) != (Pc & 0xff00))
             _cycles++;
 
-        Pc = AddressAbs;
+        Pc = _absoluteAddress;
     }
 
     private ushort ReadWord(ushort address)
@@ -1502,6 +1507,7 @@ public class Olc6502
     // Disassemble function stub
     public Dictionary<ushort, string> Disassemble(ushort nStart, ushort nStop)
     {
+
         uint addr = nStart;
         byte value = 0x00, lo = 0x00, hi = 0x00;
         var mapLines = new Dictionary<ushort, string>();
@@ -1512,83 +1518,111 @@ public class Olc6502
             return n.ToString($"X{d}");
         }
 
+
         // Iterate through memory from start to stop
         while (addr <= nStop)
         {
+            if (_bus == null)
+            {
+                continue;
+            }
+
             ushort lineAddr = (ushort)addr;
             string sInst = $"${Hex(addr, 4)}: ";
 
             // Read the opcode and increment address
-            byte opcode = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-            sInst += lookup[opcode].Name + " ";
+            byte opcode = _bus.CpuRead((ushort)addr, true);
+            addr++;
+
+            sInst += _lookup[opcode].Name + " ";
 
             // Decode addressing mode and add operands
-            if (lookup[opcode].AddrMode == IMP)
+            if (_lookup[opcode].AddressMode == IMP)
             {
                 sInst += " {IMP}";
             }
-            else if (lookup[opcode].AddrMode == IMM)
+            else if (_lookup[opcode].AddressMode == IMM)
             {
-                value = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                sInst += $"#$${Hex(value, 2)} {{IMM}}";
+                value = _bus.CpuRead((ushort)addr, true);
+                addr++;
+                sInst += $"#{Hex(value, 2)} {{IMM}}";
             }
-            else if (lookup[opcode].AddrMode == ZP0)
+            else if (_lookup[opcode].AddressMode == ZP0)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"${Hex(lo, 2)} {{ZP0}}";
             }
-            else if (lookup[opcode].AddrMode == ZPX)
+            else if (_lookup[opcode].AddressMode == ZPX)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"${Hex(lo, 2)}, X {{ZPX}}";
             }
-            else if (lookup[opcode].AddrMode == ZPY)
+            else if (_lookup[opcode].AddressMode == ZPY)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"${Hex(lo, 2)}, Y {{ZPY}}";
             }
-            else if (lookup[opcode].AddrMode == IZX)
+            else if (_lookup[opcode].AddressMode == IZX)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"(${Hex(lo, 2)}, X) {{IZX}}";
             }
-            else if (lookup[opcode].AddrMode == IZY)
+            else if (_lookup[opcode].AddressMode == IZY)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"(${Hex(lo, 2)}), Y {{IZY}}";
             }
-            else if (lookup[opcode].AddrMode == ABS)
+            else if (_lookup[opcode].AddressMode == ABS)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                hi = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
+                hi = _bus.CpuRead((ushort)addr, true);
+                addr++;
+
                 sInst += $"${Hex((ushort)((hi << 8) | lo), 4)} {{ABS}}";
             }
-            else if (lookup[opcode].AddrMode == ABX)
+            else if (_lookup[opcode].AddressMode == ABX)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                hi = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
+                hi = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"${Hex((ushort)((hi << 8) | lo), 4)}, X {{ABX}}";
             }
-            else if (lookup[opcode].AddrMode == ABY)
+            else if (_lookup[opcode].AddressMode == ABY)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                hi = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
+                hi = _bus.CpuRead((ushort)addr, true);
+                addr++;
+
                 sInst += $"${Hex((ushort)((hi << 8) | lo), 4)}, Y {{ABY}}";
             }
-            else if (lookup[opcode].AddrMode == IND)
+            else if (_lookup[opcode].AddressMode == IND)
             {
-                lo = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                hi = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
+                lo = _bus.CpuRead((ushort)addr, true);
+                addr++;
+                hi = _bus.CpuRead((ushort)addr, true);
+                addr++;
                 sInst += $"(${Hex((ushort)((hi << 8) | lo), 4)}) {{IND}}";
             }
-            else if (lookup[opcode].AddrMode == REL)
+            else if (_lookup[opcode].AddressMode == REL)
             {
-                value = _bus?.CpuRead((ushort)addr++, true) ?? 0x00;
-                sInst += $"${Hex(value, 2)} [${Hex((uint)(addr + (short)value), 4)}] {{REL}}";
+                value = _bus.CpuRead((ushort)addr, true);
+                addr++;
+
+                var signedOffset = (value & 0x80) != 0 ? (short)(value | 0xFF00) : value;
+                sInst += $"${Hex(value, 2)} [${Hex((ushort)(addr + signedOffset), 4)}] {{REL}}";
             }
 
             // Add the disassembled instruction to the dictionary
             mapLines[lineAddr] = sInst;
+
         }
 
         return mapLines;

@@ -1,5 +1,6 @@
 ﻿using NesCSharp;
 using System.IO;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 public class Cartridge
 {
@@ -13,6 +14,16 @@ public class Cartridge
     private List<byte> vCHRMemory = new();
 
     private Mapper? pMapper;
+
+    public enum MIRROR
+    {
+        HORIZONTAL,
+        VERTICAL,
+        ONESCREEN_LO,
+        ONESCREEN_HI,
+    };
+
+    public MIRROR Mirror = MIRROR.HORIZONTAL;
 
     // Define the iNES Header as a private nested struct
     private struct sHeader
@@ -68,12 +79,40 @@ public class Cartridge
         // Determine Mapper ID
         nMapperID = (byte)(((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4));
 
-        // Determine File Type (simplified to nFileType == 1)
-        nPRGBanks = header.prg_rom_chunks;
-        vPRGMemory = [..reader.ReadBytes(nPRGBanks * 16384)];
+        Mirror = (header.mapper1 & 0x01) != 0 ? MIRROR.VERTICAL : MIRROR.HORIZONTAL;
 
-        nCHRBanks = header.chr_rom_chunks;
-        vCHRMemory = [..reader.ReadBytes(nCHRBanks * 8192)];
+        // "Discover" File Format
+        byte nFileType = 1;
+
+        if (nFileType == 0)
+        {
+
+        }
+
+        if (nFileType == 1)
+        {
+
+            // Determine File Type (simplified to nFileType == 1)
+            nPRGBanks = header.prg_rom_chunks;
+            vPRGMemory = [.. reader.ReadBytes(nPRGBanks * 16384)];
+
+            nCHRBanks = header.chr_rom_chunks;
+
+            if (nCHRBanks == 0)
+            {
+                vCHRMemory = [.. reader.ReadBytes(8192)];
+            }
+            else
+            {
+                vCHRMemory = [.. reader.ReadBytes(nCHRBanks * 8192)];
+            }
+        }
+
+        if (nFileType == 2)
+        {
+
+        }
+
 
         // Load the appropriate Mapper
         switch (nMapperID)
@@ -85,8 +124,14 @@ public class Cartridge
                 throw new NotSupportedException($"Mapper ID {nMapperID} is not supported.");
         }
 
+        bImageValid = true;
+
     }
 
+    public void Reset()
+    {
+
+    }
     // CPU Write
     public bool CpuWrite(ushort address, byte data)
     {

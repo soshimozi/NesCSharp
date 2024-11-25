@@ -34,12 +34,21 @@ public class Bus
             Cpu.Clock();
         }
 
+        if (Ppu.Nmi)
+        {
+            Ppu.Nmi = false;
+            Cpu.Nmi();
+        }
+
         _nSystemClockCounter++;
     }
 
     public void Reset()
     {
+        _cart?.Reset();
         Cpu.Reset();
+        Ppu.Reset();
+
         _nSystemClockCounter = 0;
     }
 
@@ -59,7 +68,7 @@ public class Bus
         data = address switch
         {
             <= 0x1fff => CpuRam[address & 0x07ff],
-            >= 0x2000 and <= 0x3fff => Ppu.PpuRead(address, readOnly),
+            >= 0x2000 and <= 0x3fff => Ppu.CpuRead((ushort)(address & 0x0007), readOnly),
             _ => 0x00
         };
 
@@ -80,7 +89,7 @@ public class Bus
                 CpuRam[address & 0x07fff] = data;
                 break;
             case <= 0x3fff:
-                Ppu.CpuWrite(address, data);
+                Ppu.CpuWrite((ushort)(address & 0x0007), data);
                 break;
         }
     }

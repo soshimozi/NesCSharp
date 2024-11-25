@@ -58,4 +58,8 @@ public class Mapper000(byte prgBanks, byte chrBanks) : Mapper(prgBanks, chrBanks
 
         return false;
     }
+
+    public override void Reset()
+    {
+    }
 }

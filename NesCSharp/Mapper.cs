@@ -17,4 +17,5 @@ public abstract class Mapper
     public abstract bool CpuMapWrite(ushort addr, out uint mappedAddr);
     public abstract bool PpuMapRead(ushort addr, out uint mappedAddr);
     public abstract bool PpuMapWrite(ushort addr, out uint mappedAddr);
+    public abstract void Reset();
 }
